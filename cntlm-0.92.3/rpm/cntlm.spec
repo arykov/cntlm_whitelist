@@ -1,6 +1,6 @@
 Summary:        Fast NTLM authentication proxy with tunneling
 Name:           cntlm
-Version:		0.92.3
+Version:	0.93.0
 Release:        1%{?dist}
 License:        GNU GPL V2
 %if 0%{?suse_version}
@@ -152,6 +152,9 @@ fi
 %endif
 
 %changelog
+* Fri 2015-08-28 : Version 0.93
+- ProxyFor option added to force use of proxy parents for 
+  certain addresses. Exception list to NoProxy option.
 * Thu Mar 18 2010 : Version 0.90
 - Major rewrite of proxy code
 - NoProxy option added to bypass proxy for certain addresses

@@ -1,11 +1,11 @@
-.TH CNTLM 1 "Nov 2010" "cntlm 0.90" "Accelerating NTLM/NTLMv2 Authentication Proxy"
+.TH CNTLM 1 "Nov 2015" "cntlm 0.93" "Accelerating NTLM/NTLMv2 Authentication Proxy"
 .SH NAME
 \fBcntlm\fP - authenticating HTTP(S) proxy with TCP/IP tunneling and acceleration
 
 .SH SYNOPSIS
 .B cntlm
 [
-.B -AaBcDdFfgHhILlMPprSsTUuvw
+.B -AaBcDdFfgHhILlMPprSsTUuvwX
 ] [ \fIhost1\fP \fIport1\fP | \fIhost1\fP:\fIport1\fP ] ... \fIhostN\fP \fIportN\fP
 
 .SH DESCRIPTION
@@ -360,6 +360,11 @@ Workstation NetBIOS name. Do not use full qualified domain name (FQDN) here. Jus
 If not specified, \fBcntlm\fP tries to get the system hostname and if that fails, uses "cntlm" - it's because
 some proxies require this field non-empty.
 
+.TP
+.B -X <pattern1>[,<patternN]\ \ \ \ (ProxyFor)
+Force parent proxy for these host names. All matching URL's will be proxied for parent proxy. Option used as a 
+exception list for NoProxy (\fB-N\fP) option. (e.g. -X www2.domain.com -N '*.domain.com')
+
 .SH CONFIGURATION
 Configuration file is basically an INI file, except there are no "=" between keys and values. It comprises of
 whitespace delimited keyword and value pairs. Apart from that, there are sections as well, they have the usual
@@ -450,6 +455,13 @@ Parent proxy, which requires authentication. The same as proxy on the command-li
 once to specify an arbitrary number of proxies. Should one proxy fail, \fBcntlm\fP automatically moves on to the
 next one. The connect request fails only if the whole list of proxies is scanned and (for each request) and
 found to be invalid. Command-line takes precedence over the configuration file.
+
+.TP
+.B ProxyFor <pattern1>, <pattern2>, ...
+Force parent proxy for these host names. Option used as a exception list of hosts for NoProxy (\fB-N\fP) option.
+(e.g.: \fIProxyFor\fP www2.domain.com
+       \fINoProxy\fP  *.domain.com )
+See \fB-X\fP for more.
 
 .TP
 .B NoProxy <pattern1>, <pattern2>, ...

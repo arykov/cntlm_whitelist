@@ -104,6 +104,7 @@ hlist_t header_list = NULL;			/* forward_request() */
 hlist_t users_list = NULL;			/* socks5_thread() */
 plist_t scanner_agent_list = NULL;		/* scanner_hook() */
 plist_t noproxy_list = NULL;			/* proxy_thread() */
+plist_t proxyfor_list = NULL;		/* proxy_thread() */
 
 /*
  * General signal handler. If in debug mode, quit immediately.
@@ -295,10 +296,10 @@ int noproxy_match(const char *addr) {
 		if (list->aux && strlen(list->aux)
 				&& fnmatch(list->aux, addr, 0) == 0) {
 			if (debug)
-				printf("MATCH: %s (%s)\n", addr, (char *)list->aux);
+				printf("NoProxy     MATCH: %s (%s)\n", addr, (char *)list->aux);
 			return 1;
 		} else if (debug)
-			printf("   NO: %s (%s)\n", addr, (char *)list->aux);
+			printf("NoProxy  NO match: %s (%s)\n", addr, (char *)list->aux);
 
 		list = list->next;
 	}
@@ -307,7 +308,43 @@ int noproxy_match(const char *addr) {
 }
 
 /*
- * Proxy thread - decide between direct and forward based on NoProxy
+ * Add proxy-for hostname/IP
+ */
+plist_t proxyfor_add(plist_t list, char *spec) {
+	char *tok, *save;
+
+	tok = strtok_r(spec, ", ", &save);
+	while ( tok != NULL ) {
+		if (debug)
+			printf("Adding proxy-for: '%s'\n", tok);
+		list = plist_add(list, 0, strdup(tok));
+		tok = strtok_r(NULL, ", ", &save);
+	}
+
+	return list;
+}
+
+int proxyfor_match(const char *addr) {
+	plist_t list;
+
+	list = proxyfor_list;
+	while (list) {
+		if (list->aux && strlen(list->aux)
+				&& fnmatch(list->aux, addr, 0) == 0) {
+			if (debug)
+				printf("ProxyFor    MATCH: %s (%s)\n", addr, (char *)list->aux);
+			return 1;
+		} else if (debug)
+			printf("ProxyFor NO match: %s (%s)\n", addr, (char *)list->aux);
+
+		list = list->next;
+	}
+
+	return 0;
+}
+
+/*
+ * Proxy thread - decide between direct and forward based on ProxyFor and NoProxy
  */
 void *proxy_thread(void *thread_data) {
 	rr_data_t request, ret;
@@ -341,7 +378,7 @@ void *proxy_thread(void *thread_data) {
 
 			keep_alive = hlist_subcmp(request->headers, "Proxy-Connection", "keep-alive");
 
-			if (noproxy_match(request->hostname))
+			if (!proxyfor_match(request->hostname) && noproxy_match(request->hostname))
 				ret = direct_request(thread_data, request);
 			else
 				ret = forward_request(thread_data, request);
@@ -385,7 +422,7 @@ void *tunnel_thread(void *thread_data) {
 	if ((pos = strchr(hostname, ':')) != NULL)
 		*pos = 0;
 
-	if (noproxy_match(hostname))
+	if (!proxyfor_match(hostname) && noproxy_match(hostname))
 		direct_tunnel(thread_data);
 	else
 		forward_tunnel(thread_data);
@@ -594,7 +631,7 @@ void *socks5_thread(void *thread_data) {
 		goto bailout;
 
 	i = 0;
-	if (noproxy_match(thost)) {
+	if (!proxyfor_match(thost) && noproxy_match(thost)) {
 		sd = host_connect(thost, ntohs(port));
 		i = (sd >= 0);
 	} else {
@@ -711,7 +748,7 @@ int main(int argc, char **argv) {
 	syslog(LOG_INFO, "Starting cntlm version " VERSION " for LITTLE endian\n");
 #endif
 
-	while ((i = getopt(argc, argv, ":-:a:c:d:fghIl:p:r:su:vw:A:BD:F:G:HL:M:N:O:P:R:S:T:U:")) != -1) {
+	while ((i = getopt(argc, argv, ":-:a:c:d:fghIl:p:r:su:vw:A:BD:F:G:HL:M:N:O:P:R:S:T:U:X:")) != -1) {
 		switch (i) {
 			case 'A':
 			case 'D':
@@ -861,6 +898,10 @@ int main(int argc, char **argv) {
 			case 'w':
 				strlcpy(cworkstation, optarg, MINIBUF_SIZE);
 				break;
+			case 'X':
+				proxyfor_list = proxyfor_add(proxyfor_list, tmp=strdup(optarg));
+				free(tmp);
+				break;
 			case 'h':
 			default:
 				help = 1;
@@ -872,7 +913,7 @@ int main(int argc, char **argv) {
 	 */
 	if (help) {
 		printf("CNTLM - Accelerating NTLM Authentication Proxy version " VERSION "\n");
-		printf("Copyright (c) 2oo7-2o1o David Kubicek\n\n"
+		printf("Copyright (c) 2oo7-2o15 David Kubicek\n\n"
 			"This program comes with NO WARRANTY, to the extent permitted by law. You\n"
 			"may redistribute copies of it under the terms of the GNU GPL Version 2 or\n"
 			"newer. For more information about these matters, see the file LICENSE.\n"
@@ -929,7 +970,10 @@ int main(int argc, char **argv) {
 				"\t    Domain/workgroup can be set separately.\n");
 		fprintf(stderr, "\t-v  Print debugging information.\n");
 		fprintf(stderr, "\t-w  <workstation>\n"
-				"\t    Some proxies require correct NetBIOS hostname.\n\n");
+				"\t    Some proxies require correct NetBIOS hostname.\n");
+		fprintf(stderr, "\t-X  \"<hostname_wildcard1>[, <hostname_wildcardN>\"\n"
+				"\t    List of URL's that require proxy, opposing the use of the -N option.\n"
+				"\t    Is a exception list to NoProxy (-N) option.\n\n");
 		exit(1);
 	}
 
@@ -1085,6 +1129,13 @@ int main(int argc, char **argv) {
 			scanner_plugin_maxsize = atoi(tmp);
 		}
 		free(tmp);
+
+		while ((tmp = config_pop(cf, "ProxyFor"))) {
+			if (strlen(tmp)) {
+				proxyfor_list = proxyfor_add(proxyfor_list, tmp);
+			}
+			free(tmp);
+		}
 
 		while ((tmp = config_pop(cf, "NoProxy"))) {
 			if (strlen(tmp)) {

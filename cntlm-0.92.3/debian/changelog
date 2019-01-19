@@ -1,3 +1,9 @@
+cntlm (0.93.0) unstable; urgency=low
+
+  * ProxyFor option added, is a eception list to NoProxy option
+
+ -- Emanuel M. dos Santos <EmanuelMSan@gmail.com> Fri, 28 Ago 2015 11:47:00 -0300
+
 cntlm (0.92.3) unstable; urgency=low
 
   * Ad-hoc source build, not a Debian maintained package!
